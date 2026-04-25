@@ -1,0 +1,60 @@
+# Wildebeest Chess AI
+
+A game-playing engine for **Two-player Wildebeest (2PW)**, an 11×11 chess variant featuring serpents, gorillas, catapults, beekeepers, jet-pack kings, and a grand empress that can only be summoned through poison.
+
+The engine uses **alpha-beta search with iterative deepening**, time-aware move selection, and a stack of standard performance tricks (transposition table, Zobrist hashing, killer-move heuristic, evaluation cache, quiescence search).
+
+## The game
+
+Two-player Wildebeest is played on an 11×11 board with a mix of standard chess pieces and custom ones:
+
+| Piece | Behavior |
+|---|---|
+| **Serpent** | Moves like a king; poisons all adjacent enemies as an after-effect. |
+| **Old Woman** | Moves like a king; if a Serpent poisons a piece adjacent to her, she transforms into the Grand Empress and the Serpent dies. |
+| **Grand Empress** | Moves like a Queen + Knight + Serpent. Only created via the Old Woman transformation. |
+| **Catapult** | Flings adjacent friendly pieces in a straight line over other pieces. |
+| **Gorilla** | Cannot be captured; pushes adjacent pieces one square, capturing whatever is behind them. |
+| **Beekeeper** | Paralyzes all adjacent enemy pieces. |
+| **Prince Joey** | King-like, with a special after-effect rule. |
+| **Golf Cart** | Only moves along the top and bottom rows; can rampage. |
+| **Time Machine** | Created when a Pawn promotes; charges the Golf Cart. |
+| **King with Jet Pack** | What a King becomes after landing on the central Jet Pack square — moves like a Bishop. |
+
+Plus standard Pawns, Bishops, Rooks, and Kings. Special board squares (Jet Pack, Transporter Pads) modify pieces that land on them.
+
+## Engine
+
+- **Search:** alpha-beta with iterative deepening, bounded by the per-move time budget read from the input board state.
+- **Move ordering:** killer-move heuristic to improve pruning.
+- **Transposition table** keyed by Zobrist hash.
+- **Evaluation cache** to avoid recomputing static evaluations.
+- **Quiescence search** extends tactical lines past the nominal depth to avoid horizon effects.
+- **Evaluation:** material with explosion-aware adjustments (catapults and gorillas can take out clusters), king safety dominant.
+
+## Usage
+
+The engine reads a board state from stdin and writes the chosen move to stdout.
+
+**Linux/macOS:**
+```
+chmod +x run
+./run < board.txt
+```
+
+**Windows (PowerShell):**
+```
+Get-Content board.txt | python run.py
+```
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `run.py` | Entry point — time management and iterative deepening loop. |
+| `ai.py` | Alpha-beta search, evaluation, Zobrist hashing, transposition/killer tables. |
+| `moves.py` | Legal move generation for all piece types. |
+| `effects.py` | After-effects (poisoning, promotion, gorilla pushes, golf cart rampage, etc.). |
+| `board.py` | Board representation, parsing, and serialization. |
+| `constants.py` | Board size, piece codes, directions. |
+| `utils.py` | Helpers. |
