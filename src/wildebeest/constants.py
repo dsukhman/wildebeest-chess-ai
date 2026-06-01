@@ -39,7 +39,7 @@ BISHOP_DIRS = [
 
 CANNOT_FLING = {'h'} 
 CANNOT_BE_CAPTURED_BY_FLING = {'k', 'g', 'w'}
-CANNOT_PUSH = {'g, w'} 
+CANNOT_PUSH = {'g', 'w'} 
 CANNOT_PUSH_GORILLA = {'g'} 
 NON_POISONABLE = {'x','h'}
 IMMUNE_TO_SWARM = {'x','h'}

@@ -1,7 +1,7 @@
-from board import *
-from constants import *
-from effects import *
-from utils import *
+from .board import *
+from .constants import *
+from .effects import *
+from .utils import *
 
 # =========================
 # Main generator

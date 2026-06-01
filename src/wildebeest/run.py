@@ -2,9 +2,9 @@
 
 from random import random
 import time
-from board import read_board, write_board
-from ai import alphabeta, TT, EVAL_CACHE, KILLER_MOVES
-from moves import generate_all_moves
+from .board import read_board, write_board
+from .ai import alphabeta, TT, EVAL_CACHE, KILLER_MOVES
+from .moves import generate_all_moves
 
 def main():
     board = read_board()

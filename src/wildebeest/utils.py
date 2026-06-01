@@ -1,4 +1,4 @@
-from constants import TRANSPORTER_POSITIONS
+from .constants import TRANSPORTER_POSITIONS
 
 # =========================
 # Helper Functions

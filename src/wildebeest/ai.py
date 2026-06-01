@@ -1,7 +1,7 @@
 import random
-from constants import *
-from utils import *
-from moves import generate_all_moves
+from .constants import *
+from .utils import *
+from .moves import generate_all_moves
 
 # =========================
 # Global Variables
