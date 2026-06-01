@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from random import random
+import random
 import time
 from .board import read_board, write_board
 from .ai import alphabeta, TT, EVAL_CACHE, KILLER_MOVES
