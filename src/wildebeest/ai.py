@@ -482,16 +482,20 @@ def capture_score(board_before, board_after):
     before = 0
     after = 0
 
+    gb = board_before.grid
+    ga = board_after.grid
     for r in range(BOARD_SIZE):
+        rb = gb[r]
+        ra = ga[r]
         for c in range(BOARD_SIZE):
-            b = board_before.grid[r][c]
-            a = board_after.grid[r][c]
+            b = rb[c]
+            a = ra[c]
 
-            if b not in {'.', '*', '#'}:
+            if b not in EMPTY_SQUARES:
                 val = PIECE_VALUES.get(b.lower(), 0)
                 before += val if b.isupper() else -val
 
-            if a not in {'.', '*', '#'}:
+            if a not in EMPTY_SQUARES:
                 val = PIECE_VALUES.get(a.lower(), 0)
                 after += val if a.isupper() else -val
 
@@ -502,16 +506,26 @@ def capture_score(board_before, board_after):
 # ========================= 
 
 def board_hash(board):
+    # Computed once per finalized board, then cached. Boards are immutable
+    # during search (move generation builds a fresh clone per move), so the
+    # cached value can never go stale before it is read.
+    h = board._hash
+    if h is not None:
+        return h
+
     h = 0
+    grid = board.grid
     for r in range(BOARD_SIZE):
+        row = grid[r]
         for c in range(BOARD_SIZE):
-            piece = board.grid[r][c]
-            if piece not in {'.', '*', '#'}:
+            piece = row[c]
+            if piece not in EMPTY_SQUARES:
                 h ^= ZOBRIST_TABLE[(r, c, piece)]
-    
+
     if board.turn == 'W':
         h ^= ZOBRIST_SIDE
-        
+
+    board._hash = h
     return h
 
 def evaluate_cached(board):

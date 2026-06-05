@@ -11,7 +11,8 @@ class Board:
         self.move_no = move_no
 
         self.cart_returns = []
-        
+        self._hash = None
+
     def clone(self):
         return Board(
             self.turn,
