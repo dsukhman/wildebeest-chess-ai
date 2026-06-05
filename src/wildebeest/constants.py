@@ -5,6 +5,7 @@
 BOARD_SIZE = 11
 MIDDLE_ROW = 5
 TRANSPORTER_POSITIONS = [(3,1), (3,9), (7,1), (7,9)]
+EMPTY_SQUARES = frozenset({'.', '*', '#'})
 
 # =========================
 # Directions
