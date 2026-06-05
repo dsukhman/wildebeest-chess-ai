@@ -35,26 +35,46 @@ Plus standard Pawns, Bishops, Rooks, and Kings. Special board squares (Jet Pack,
 ## Usage
 
 The engine reads a board state from stdin and writes the chosen move to stdout.
+Install it once (editable), then invoke it as the `wildebeest` command or as a module.
+
+```
+python -m pip install -e .
+```
 
 **Linux/macOS:**
 ```
-chmod +x run
-./run < board.txt
+wildebeest < examples/board.txt
+# or, without the console script:
+python -m wildebeest < examples/board.txt
 ```
 
 **Windows (PowerShell):**
 ```
-Get-Content board.txt | python run.py
+Get-Content examples\board.txt | wildebeest
+# or:
+Get-Content examples\board.txt | python -m wildebeest
 ```
 
-## Files
+## Project layout
 
-| File | Purpose |
-|---|---|
-| `run.py` | Entry point — time management and iterative deepening loop. |
-| `ai.py` | Alpha-beta search, evaluation, Zobrist hashing, transposition/killer tables. |
-| `moves.py` | Legal move generation for all piece types. |
-| `effects.py` | After-effects (poisoning, promotion, gorilla pushes, golf cart rampage, etc.). |
-| `board.py` | Board representation, parsing, and serialization. |
-| `constants.py` | Board size, piece codes, directions. |
-| `utils.py` | Helpers. |
+```
+src/wildebeest/         # the engine package
+  __main__.py           # enables `python -m wildebeest`
+  run.py                # main(): time management + iterative deepening loop
+  ai.py                 # alpha-beta search, evaluation, Zobrist, TT, killer moves
+  moves.py              # legal move generation for all piece types
+  effects.py            # after-effects (poison, promotion, gorilla push, rampage, ...)
+  board.py              # board representation, parsing, serialization
+  constants.py          # board size, piece codes, directions
+  utils.py              # helpers
+tests/                  # pytest suite (run with `python -m pytest`)
+examples/board.txt      # sample board state
+docs/rules.md           # piece & rule reference
+```
+
+## Development
+
+```
+python -m pip install -e ".[dev]"   # install with pytest
+python -m pytest                    # run the test suite
+```
