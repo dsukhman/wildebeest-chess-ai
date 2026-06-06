@@ -1,4 +1,5 @@
 import random
+import time
 from .constants import *
 from .utils import *
 from .moves import generate_all_moves
@@ -10,6 +11,23 @@ from .moves import generate_all_moves
 TT = {}
 EVAL_CACHE = {}
 KILLER_MOVES = {}
+
+# Node counter for benchmarking (incremented at each search node).
+NODES = 0
+
+# Wall-clock deadline (epoch seconds) for the current search; None disables it.
+# When set, the search aborts with SearchTimeout once the deadline passes so a
+# single deep iteration can never blow the move's time budget.
+DEADLINE = None
+
+
+class SearchTimeout(Exception):
+    """Raised inside the search when the time deadline is exceeded."""
+
+
+def time_is_up():
+    # time.time() is comparatively costly, so only poll it every 256 nodes.
+    return DEADLINE is not None and (NODES & 255) == 0 and time.time() >= DEADLINE
 
 PIECE_VALUES = {
     'p': 1,      # Pawn (weak but can clog transporters)
@@ -218,6 +236,26 @@ def evaluate(board):
 def is_capture(board_before, board_after):
     return capture_score(board_before, board_after) != 0
 
+def terminal_value(board):
+    """Signed game-over value if a king is missing, else None.
+    +100000 = White wins (Black king gone), -100000 = Black wins, 0 = both gone.
+    Early-exits as soon as both kings are seen."""
+    white_king = False
+    black_king = False
+    for row in board.grid:
+        for piece in row:
+            if piece == 'K' or piece == 'W':
+                white_king = True
+            elif piece == 'k' or piece == 'w':
+                black_king = True
+        if white_king and black_king:
+            return None
+
+    if not white_king and not black_king:
+        return 0
+    # The side whose king is missing has lost. Score is from White's view.
+    return -100000 if not white_king else 100000
+
 def is_in_check(board, white=True):
     king_pos = None
     target = 'K' if white else 'k'
@@ -279,9 +317,22 @@ def move_score(board_before, board_after):
 # =========================
 
 def alphabeta(board, depth, alpha, beta, maximizing):
+    global NODES
+    NODES += 1
+
+    if time_is_up():
+        raise SearchTimeout
+
+    # Terminal: a king has been captured, stop expanding dead positions.
+    term = terminal_value(board)
+    if term is not None:
+        return term, None
+
     alpha_orig = alpha
+    beta_orig = beta
     key = board_hash(board)
 
+    tt_move = None
     if key in TT:
         tt_depth, tt_value, tt_flag, tt_move = TT[key]
 
@@ -295,7 +346,7 @@ def alphabeta(board, depth, alpha, beta, maximizing):
 
             if alpha >= beta:
                 return tt_value, tt_move
-    
+
     if depth <= 0:
         return quiescence(board, depth, alpha, beta, maximizing), None
 
@@ -304,122 +355,86 @@ def alphabeta(board, depth, alpha, beta, maximizing):
     if not moves:
         return evaluate_cached(board), None
 
-    def move_order(move):
-        score = 0
-        
-        if key in TT:
-            _, _, _, tt_move = TT[key]
-            if tt_move is not None and board_hash(move) == board_hash(tt_move):
-                score += 100000
+    # Compute each move's capture gain (mover-relative) exactly once and reuse it for ordering, the LMR test, and capture detection.
+    for m in moves:
+        m._cap = capture_score(board, m)
 
-        if is_capture(board, move):
-            cs = capture_score(board, move)
-            if cs != 0:
-                score += 30000 + cs * 20
-        
-        for r in range(BOARD_SIZE):
-            for c in range(BOARD_SIZE):
-                if board.grid[r][c] != move.grid[r][c]:
-                    if move.grid[r][c] not in {'.', '*', '#'}:
-                        if 3 <= r <= 7 and 3 <= c <= 7:
-                            score += 50
-                    break
-            else:
-                continue
-            break
-        
-        if move in KILLER_MOVES.get(depth, []):
-            score += 40000
+    tt_move_hash = board_hash(tt_move) if tt_move is not None else None
+    killers = KILLER_MOVES.get(depth, ())
 
-        score += move_score(board, move) * 0.5 # too slow to calculate for every move
-        #score += evaluate_cached(move) * 0.1
-
+    def move_order(m):
+        # Best-for-the-mover first (descending), independent of min/max since the alpha-beta bounds handle the sign; ordering just maximizes cutoffs.
+        score = m._cap * 20.0
+        if m._cap != 0:
+            score += 30000.0
+        mh = board_hash(m)
+        if tt_move_hash is not None and mh == tt_move_hash:
+            score += 1_000_000.0
+        if mh in killers:
+            score += 40000.0
         return score
 
-    # moves.sort(key=move_order, reverse=maximizing)
-    # moves = moves[:10] # limit to top 20 moves for efficiency
-    captures = []
-    quiet_moves = []
+    moves.sort(key=move_order, reverse=True)
 
-    for m in moves:
-        if is_capture(board, m):
-            captures.append(m)
-        else:
-            quiet_moves.append(m)
-
-    captures.sort(key=lambda m: capture_score(board, m), reverse=maximizing)
-    quiet_moves.sort(key=move_order, reverse=maximizing)
-    moves = captures + quiet_moves
-    
     best_move = None
-    first = True
-        
+
+    def store_killer(m):
+        if m._cap != 0:
+            return  # captures are already ordered via their gain
+        h = board_hash(m)
+        kl = KILLER_MOVES.setdefault(depth, [])
+        if h not in kl:
+            kl.append(h)
+            if len(kl) > 2:
+                kl.pop(0)
+
     if maximizing:
         value = float('-inf')
         for i, move in enumerate(moves):
-            if is_in_check(move, white=(board.turn == 'W')):
-                continue
             new_depth = depth - 1
-            if depth >= 3:
-                if i > 3 and not is_capture(board, move):
-                    new_depth -= 1
-                if i > 8:
-                    continue
-            if first:
-                score, _ = alphabeta(move, new_depth, alpha, beta, False)
-                first = False
-            else:
-                score, _ = alphabeta(move, new_depth, alpha, alpha + 1, False)
+            # Late Move Reduction: search late quiet moves shallower first, then re-search at full depth only if they look promising.
+            reduce = 1 if (depth >= 3 and i >= 4 and move._cap == 0) else 0
 
-                if alpha < score < beta:
+            if i == 0:
+                score, _ = alphabeta(move, new_depth, alpha, beta, False)
+            else:
+                score, _ = alphabeta(move, new_depth - reduce, alpha, alpha + 1, False)
+                if score > alpha and (reduce or score < beta):
                     score, _ = alphabeta(move, new_depth, alpha, beta, False)
 
             if score > value:
                 value = score
                 best_move = move
-
-            alpha = max(alpha, value)
-
+            if value > alpha:
+                alpha = value
             if alpha >= beta:
-                KILLER_MOVES.setdefault(depth, []).append(move)
-                if len(KILLER_MOVES[depth]) > 2:
-                    KILLER_MOVES[depth].pop(0)
+                store_killer(move)
                 break
     else:
         value = float('inf')
         for i, move in enumerate(moves):
-            if is_in_check(move, white=(board.turn == 'W')):
-                continue
             new_depth = depth - 1
-            if depth >= 3:
-                if i > 3 and not is_capture(board, move):
-                    new_depth -= 1
-                if i > 8:
-                    continue
-            if first:
-                score, _ = alphabeta(move, new_depth, alpha, beta, True)
-                first = False
-            else:
-                score, _ = alphabeta(move, new_depth, beta - 1, beta, True)
+            reduce = 1 if (depth >= 3 and i >= 4 and move._cap == 0) else 0
 
-                if alpha < score < beta:
+            if i == 0:
+                score, _ = alphabeta(move, new_depth, alpha, beta, True)
+            else:
+                score, _ = alphabeta(move, new_depth - reduce, beta - 1, beta, True)
+                if score < beta and (reduce or score > alpha):
                     score, _ = alphabeta(move, new_depth, alpha, beta, True)
 
             if score < value:
                 value = score
                 best_move = move
-
-            beta = min(beta, value)
-
+            if value < beta:
+                beta = value
             if alpha >= beta:
-                KILLER_MOVES.setdefault(depth, []).append(move)
-                if len(KILLER_MOVES[depth]) > 2:
-                    KILLER_MOVES[depth].pop(0)
+                store_killer(move)
                 break
-            
+
     if value <= alpha_orig:
         flag = "UPPER"
-    elif value >= beta:
+    elif value >= beta_orig:
         flag = "LOWER"
     else:
         flag = "EXACT"
@@ -433,11 +448,21 @@ def alphabeta(board, depth, alpha, beta, maximizing):
 # ========================= 
 
 def quiescence(board, depth, alpha, beta, maximizing):
+    global NODES
+    NODES += 1
+
+    if time_is_up():
+        raise SearchTimeout
+
+    term = terminal_value(board)
+    if term is not None:
+        return term
+
     stand_pat = evaluate_cached(board)
 
     if depth >= MAX_QUIESCENCE_DEPTH:
         return stand_pat
-    
+
     if maximizing:
         if stand_pat >= beta:
             return beta
@@ -447,16 +472,15 @@ def quiescence(board, depth, alpha, beta, maximizing):
             return alpha
         beta = min(beta, stand_pat)
 
-    moves = generate_all_moves(board)
+    # Compute capture gain once per move, keep only captures.
     capture_moves = []
-
-    for m in moves:
-        if is_capture(board, m):
-            #if capture_score(board, m) >= -5:
+    for m in generate_all_moves(board):
+        m._cap = capture_score(board, m)
+        if m._cap != 0:
             capture_moves.append(m)
-                
-    capture_moves.sort(key=lambda m: capture_score(board, m), reverse=True)
-    
+
+    capture_moves.sort(key=lambda m: m._cap, reverse=True)
+
     if not capture_moves:
         return stand_pat
 
