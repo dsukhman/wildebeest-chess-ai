@@ -11,13 +11,7 @@ from .moves import generate_all_moves
 TT = {}
 EVAL_CACHE = {}
 KILLER_MOVES = {}
-
-# Node counter for benchmarking (incremented at each search node).
 NODES = 0
-
-# Wall-clock deadline (epoch seconds) for the current search; None disables it.
-# When set, the search aborts with SearchTimeout once the deadline passes so a
-# single deep iteration can never blow the move's time budget.
 DEADLINE = None
 
 
@@ -26,12 +20,8 @@ class SearchTimeout(Exception):
 
 
 def time_is_up():
-    # time.time() is comparatively costly, so only poll it every 256 nodes.
     return DEADLINE is not None and (NODES & 255) == 0 and time.time() >= DEADLINE
 
-# Material in centipawns (pawn = 100) so positional terms below can be tuned as
-# small fractions of a pawn instead of swamping material. Kings stay at the mate
-# bound (±100000) and cancel between the two sides in a balanced position.
 PIECE_VALUES = {
     'p': 100,    # Pawn (weak but can clog transporters)
     'b': 300,    # Bishop (long-range piece, good for control)
@@ -55,7 +45,6 @@ PIECE_VALUES = {
     'w': 100000
 }
 
-EXPLOSION_FACTOR = 4
 MAX_QUIESCENCE_DEPTH = 4
 
 # =========================
@@ -103,7 +92,6 @@ def evaluate(board):
 
             val = PIECE_VALUES.get(pl, 0)
 
-            # Positional bonuses (centipawns) — small fractions of a pawn.
             if 3 <= r <= 7 and 3 <= c <= 7:
                 val += 15  # central control
 
@@ -237,9 +225,6 @@ def evaluate(board):
 # Helper Functions
 # =========================
 
-def is_capture(board_before, board_after):
-    return capture_score(board_before, board_after) != 0
-
 def terminal_value(board):
     """Signed game-over value if a king is missing, else None.
     +100000 = White wins (Black king gone), -100000 = Black wins, 0 = both gone.
@@ -259,62 +244,6 @@ def terminal_value(board):
         return 0
     # The side whose king is missing has lost. Score is from White's view.
     return -100000 if not white_king else 100000
-
-def is_in_check(board, white=True):
-    king_pos = None
-    target = 'K' if white else 'k'
-
-    for r in range(BOARD_SIZE):
-        for c in range(BOARD_SIZE):
-            if board.grid[r][c] == target:
-                king_pos = (r, c)
-                break
-
-    if king_pos is None:
-        return True  # king gone = checkmate
-
-    enemy_moves = generate_all_moves(board)
-
-    for move in enemy_moves:
-        if move.grid[king_pos[0]][king_pos[1]] != target:
-            return True
-
-    return False
-
-# =========================
-# Minimax
-# =========================
-
-def minimax(board, depth, maximizing):
-    if depth == 0:
-        return evaluate(board) * (1 + 0.01 * depth), None
-
-    moves = generate_all_moves(board)
-
-    if not moves:
-        return evaluate(board), None
-
-    best_move = None
-
-    if maximizing:
-        max_eval = float('-inf')
-        for move in moves:
-            eval_score, _ = minimax(move, depth - 1, False)
-            if eval_score > max_eval:
-                max_eval = eval_score
-                best_move = move
-        return max_eval, best_move
-    else:
-        min_eval = float('inf')
-        for move in moves:
-            eval_score, _ = minimax(move, depth - 1, True)
-            if eval_score < min_eval:
-                min_eval = eval_score
-                best_move = move
-        return min_eval, best_move
-
-def move_score(board_before, board_after):
-    return evaluate_cached(board_after) - evaluate_cached(board_before)
 
 # =========================
 # Alpha-Beta Pruning
@@ -534,9 +463,6 @@ def capture_score(board_before, board_after):
 # ========================= 
 
 def board_hash(board):
-    # Computed once per finalized board, then cached. Boards are immutable
-    # during search (move generation builds a fresh clone per move), so the
-    # cached value can never go stale before it is read.
     h = board._hash
     if h is not None:
         return h
