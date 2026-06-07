@@ -29,24 +29,27 @@ def time_is_up():
     # time.time() is comparatively costly, so only poll it every 256 nodes.
     return DEADLINE is not None and (NODES & 255) == 0 and time.time() >= DEADLINE
 
+# Material in centipawns (pawn = 100) so positional terms below can be tuned as
+# small fractions of a pawn instead of swamping material. Kings stay at the mate
+# bound (±100000) and cancel between the two sides in a balanced position.
 PIECE_VALUES = {
-    'p': 1,      # Pawn (weak but can clog transporters)
-    'b': 3,      # Bishop (long-range piece, good for control)
-    'r': 5,      # Rook (strong piece, good for control and captures)
-    'n': 3,      # Knight (good for forks and tricky maneuvers)
+    'p': 100,    # Pawn (weak but can clog transporters)
+    'b': 300,    # Bishop (long-range piece, good for control)
+    'r': 500,    # Rook (strong piece, good for control and captures)
+    'n': 300,    # Knight (good for forks and tricky maneuvers)
 
-    's': 6,      # Serpent (king movement + poison)
-    'o': 4,      # Old woman
-    'j': 4,      # Prince Joey
-    'z': 5,      # Beekeeper (paralysis is strong)
+    's': 600,    # Serpent (king movement + poison)
+    'o': 400,    # Old woman
+    'j': 400,    # Prince Joey
+    'z': 500,    # Beekeeper (paralysis is strong)
 
-    'c': 6,      # Catapult (very strong tactical piece)
-    'g': 6,      # Gorilla (board control + push mechanics)
+    'c': 600,    # Catapult (very strong tactical piece)
+    'g': 600,    # Gorilla (board control + push mechanics)
 
-    'e': 10,     # Grand Empress (queen + knight + serpent)
+    'e': 1000,   # Grand Empress (queen + knight + serpent)
 
-    'x': 5,      # Golf Cart
-    'h': 1,      # Time machine (utility piece)
+    'x': 500,    # Golf Cart
+    'h': 100,    # Time machine (utility piece)
 
     'k': 100000,  # King must be overwhelming
     'w': 100000
@@ -92,7 +95,7 @@ def evaluate(board):
         for c in range(BOARD_SIZE):
             piece = grid[r][c]
 
-            if piece in {'.', '*', '#'}:
+            if piece in EMPTY_SQUARES:
                 continue
 
             is_white = piece.isupper()
@@ -100,14 +103,15 @@ def evaluate(board):
 
             val = PIECE_VALUES.get(pl, 0)
 
+            # Positional bonuses (centipawns) — small fractions of a pawn.
             if 3 <= r <= 7 and 3 <= c <= 7:
-                val += 1.0
+                val += 15  # central control
 
-            if (r, c) in [(3,1), (3,9), (7,1), (7,9)]:
-                val += 1.5
+            if (r, c) in TRANSPORTER_POSITIONS:
+                val += 25  # occupying a transporter pad
 
             if pl == 'p':
-                val += (r if is_white else (10 - r)) * 0.2
+                val += (r if is_white else (10 - r)) * 10  # pawn advancement
 
             if is_white:
                 score += val
@@ -144,14 +148,14 @@ def evaluate(board):
                 continue
 
             target = grid[nr][nc]
-            if target in {'.', '*', '#'}:
+            if target in EMPTY_SQUARES:
                 continue
 
             if target.lower() not in NON_POISONABLE:
                 if target.isupper() != is_white:
-                    pressure += 1  # strong attack
+                    pressure += 15  # strong attack
                 else:
-                    pressure -= 1  # friendly danger
+                    pressure -= 15  # friendly danger
 
         score += pressure if is_white else -pressure
 
@@ -162,14 +166,14 @@ def evaluate(board):
                 continue
 
             target = grid[nr][nc]
-            if target in {'.', '*', '#'}:
+            if target in EMPTY_SQUARES:
                 continue
 
             if target.lower() in IMMUNE_TO_SWARM:
                 continue
 
             if target.isupper() != is_white:
-                score += 2 if is_white else -2
+                score += 20 if is_white else -20
 
     def king_safety(r, c, is_white):
         danger = 0
@@ -181,17 +185,17 @@ def evaluate(board):
 
             piece = grid[nr][nc]
 
-            if piece in {'.', '*', '#'}:
+            if piece in EMPTY_SQUARES:
                 continue
 
             if piece.isupper() != is_white:
-                danger += 2
+                danger += 15
 
             if piece.lower() == 's':
-                danger += 4
+                danger += 40
 
             if piece.lower() == 'e':
-                danger += 5
+                danger += 60
 
         return -danger if is_white else danger
 
@@ -202,10 +206,10 @@ def evaluate(board):
         count = 0
 
         for p in grid[r]:
-            if p not in {'.', '*', '#'}:
+            if p not in EMPTY_SQUARES:
                 count += 1
 
-        # about to explode next turn
+        # about to explode next turn: weigh the material at stake in the blast
         if count % 5 == 4:
             blast = 0
 
@@ -215,15 +219,15 @@ def evaluate(board):
                     continue
 
                 piece = grid[nr][nc]
-                if piece in {'.', '*', '#'}:
+                if piece in EMPTY_SQUARES:
                     continue
 
                 val = PIECE_VALUES.get(piece.lower(), 0)
 
                 if piece.isupper() == is_white:
-                    blast -= val * 3
+                    blast -= val
                 else:
-                    blast += val * 3
+                    blast += val
 
             score += blast if is_white else -blast
 
