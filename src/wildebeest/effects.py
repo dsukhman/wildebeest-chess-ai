@@ -7,16 +7,52 @@ from .utils import *
 
 def apply_after_effects(board): # Apply all after effects to the board in the correct order
     handle_cart_return(board)
+    serpents = []
+    empress = []
+    joeys = []
+    white_cart = None
+    black_cart = None
+    tm_white = False
+    tm_black = False
 
-    handle_serpent_poison(board)
-    
-    handle_pawn_charge(board)
+    grid = board.grid
+    for r in range(11):
+        row = grid[r]
+        for c in range(11):
+            piece = row[c]
+            if piece in EMPTY_SQUARES:
+                continue
+            pl = piece.lower()
+            if pl == 's':
+                serpents.append((r, c))
+            elif pl == 'e':
+                empress.append((r, c))
+            elif pl == 'j':
+                joeys.append((r, c))
+            elif piece == 'X':
+                white_cart = (r, c)
+            elif piece == 'x':
+                black_cart = (r, c)
+            elif piece == 'H':
+                tm_white = True
+            elif piece == 'h':
+                tm_black = True
 
-    handle_time_machine_charge(board)
+    # Serpent poison runs first, so census positions still match the board.
+    if serpents or empress:
+        handle_serpent_poison(board, serpents, empress)
+
+    # Carts are NON_POISONABLE, so poison did not move them, census carts valid.
+    handle_pawn_charge(board, white_cart, black_cart)
+
+    # Time machines only exist after a pawn promotion, skip otherwise.
+    if tm_white or tm_black:
+        handle_time_machine_charge(board)
 
     handle_transporters(board)
 
-    handle_prince_joey(board)
+    if joeys:
+        handle_prince_joey(board, joeys)
 
 def handle_cart_return(board):
     new_returns = []
@@ -37,20 +73,10 @@ def handle_cart_return(board):
 
     board.cart_returns = new_returns
                 
-def handle_serpent_poison(board):
-    serpents = []
-    empress = []
-
-    for r in range(11):
-        for c in range(11):
-            if board.grid[r][c].lower() == 's':
-                serpents.append((r, c))
-            elif board.grid[r][c].lower() == 'e':
-                empress.append((r, c))
-                
+def handle_serpent_poison(board, serpents, empress):
     for r, c in serpents:
         apply_serpent_poison(board, r, c, True)
-    
+
     for r, c in empress:
         apply_serpent_poison(board, r, c, False)
 
@@ -119,7 +145,7 @@ def apply_serpent_poison(board, sr, sc, is_serpent=True):
         for pr, pc in poisoned_positions:
             board.grid[pr][pc] = underlying_square(pr, pc)
      
-def handle_pawn_charge(board):
+def handle_pawn_charge(board, white_cart, black_cart):
     trigger_white = False  # triggers WHITE cart
     trigger_black = False  # triggers BLACK cart
 
@@ -131,16 +157,6 @@ def handle_pawn_charge(board):
                 trigger_black = True   # If there is a white pawn, it triggers the black cart
             else:
                 trigger_white = True   # If there is a black pawn, it triggers the white cart
-
-    white_cart = None # Position of the white golf cart, if it exists
-    black_cart = None # Position of the black golf cart, if it exists
-
-    for r in range(11): # Find the golf carts on the board and record their columns
-        for c in range(11): # Iterate through each column on the board
-            if board.grid[r][c] == 'X': # If there is a white golf cart, record its position 
-                white_cart = (r, c)
-            elif board.grid[r][c] == 'x': # If there is a black golf cart, record its position
-                black_cart = (r, c)
 
     if (trigger_white and trigger_black and
         white_cart and black_cart and
@@ -222,13 +238,17 @@ def handle_transporters(board):
     board.grid[7][1] = originals[(7, 9)] # Move piece from (7, 9) to (7, 1)
     board.grid[3][9] = originals[(7, 1)] # Move piece from (7, 1) to (3, 9)
     
-def handle_prince_joey(board):
-    joey_positions = [] # Empty list for possible joey locations
+def handle_prince_joey(board, census_joeys):
+    joey_positions = []
+    for r, c in census_joeys:
+        if (r, c) in TRANSPORTER_POSITIONS:
+            continue  # handled by the pad rescan below
+        if board.grid[r][c].lower() == 'j':
+            joey_positions.append((r, c))
 
-    for r in range(11): # Iterate through each row on the board
-        for c in range(11): # Iterate through each column on the board
-            if board.grid[r][c].lower() == 'j': # If there is a Prince Joey on the board, add its position to the list of possible joey locations
-                joey_positions.append((r, c))
+    for r, c in TRANSPORTER_POSITIONS:
+        if board.grid[r][c].lower() == 'j':
+            joey_positions.append((r, c))
 
     exploding_joeys = [] # List to store the positions of Prince Joeys that will explode
     for jr, jc in joey_positions: # Iterate through each possible joey location and check if the explosion condition is met
