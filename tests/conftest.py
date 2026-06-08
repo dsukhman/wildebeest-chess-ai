@@ -1,3 +1,5 @@
+"""Shared pytest fixtures and the canonical starting board used across tests."""
+
 import io
 import sys
 from pathlib import Path
@@ -9,7 +11,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from wildebeest.board import read_board  # noqa: E402
 
-EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+# Canonical 2PW starting position, White to move. Tests pin to this rather than
+# examples/board.txt, which is a mutable scratch input the user may edit.
+CANONICAL = """\
+W
+RNZBOKXBCNR
+GPPSPJPPPPG
+...........
+.*.......*.
+...........
+.....#.....
+...........
+.*.......*.
+...........
+gppspjppppg
+rnzbokxbcnr
+0
+60000
+0
+"""
 
 
 def board_from_text(text):
@@ -24,7 +44,7 @@ def board_from_text(text):
 
 @pytest.fixture
 def start_text():
-    return (EXAMPLES / "board.txt").read_text()
+    return CANONICAL
 
 
 @pytest.fixture
