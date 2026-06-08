@@ -1,3 +1,5 @@
+"""Tests for after-effects application and the board helper utilities."""
+
 from wildebeest.board import Board
 from wildebeest.effects import apply_after_effects
 from wildebeest.utils import in_bounds, is_enemy, is_friendly

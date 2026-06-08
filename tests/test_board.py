@@ -1,3 +1,5 @@
+"""Tests for board parsing, cloning, and stdout serialization."""
+
 import io
 from contextlib import redirect_stdout
 

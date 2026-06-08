@@ -1,3 +1,5 @@
+"""Tests for static evaluation and the alpha-beta search."""
+
 from wildebeest.ai import alphabeta, evaluate
 from wildebeest.board import Board
 

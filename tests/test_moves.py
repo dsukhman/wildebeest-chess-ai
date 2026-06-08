@@ -1,3 +1,5 @@
+"""Tests for pseudo-legal move generation from the starting position."""
+
 from wildebeest.board import Board
 from wildebeest.moves import generate_all_moves
 
