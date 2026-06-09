@@ -78,3 +78,27 @@ docs/rules.md           # piece & rule reference
 python -m pip install -e ".[dev]"   # install with pytest
 python -m pytest                    # run the test suite
 ```
+
+## Running under PyPy (faster, optional)
+
+The engine is pure Python with no C-extension dependencies, so it runs unchanged under [PyPy](https://www.pypy.org/), a Python interpreter with a JIT compiler. For this kind of search-heavy code that means a large speedup (commonly 5–30×) with **no code changes**: same source, same moves, just faster.
+
+PyPy keeps its own packages separate from CPython, so the steps are: install PyPy, give it `pip`, install this project into it, then run. After installing PyPy, **open a new terminal** so `pypy3` is on your PATH.
+
+**Linux/macOS:**
+```
+# install PyPy (e.g. macOS: `brew install pypy3`; Linux: `apt install pypy3`)
+pypy3 -m ensurepip            # one-time: bootstrap pip into PyPy
+pypy3 -m pip install -e .     # install this project into PyPy
+pypy3 -m wildebeest < examples/board.txt
+```
+
+**Windows (PowerShell):**
+```
+# install PyPy (e.g. `winget install PyPy.PyPy.3.11`), then open a new terminal
+pypy3 -m ensurepip            # one-time: bootstrap pip into PyPy
+pypy3 -m pip install -e .     # install this project into PyPy
+Get-Content examples\board.txt | pypy3 -m wildebeest
+```
+
+Trade-off: PyPy's JIT needs ~0.5–1s to warm up, so for very short per-move time budgets the benefit is smaller; for multi-second searches it is a clear win.
